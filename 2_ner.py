@@ -1,69 +1,197 @@
-import os
-from transformers import AutoTokenizer,Pipeline,AutoModelForTokenClassification
-import pandas
+from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
+import pandas as pd
+from pathlib import Path
+from typing import List, Dict, Tuple
 import torch
-import argparse
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+import logging
+import sys
+import gc
 
-"""2 step 
-This script is used to extract the date information from the text files using the NER model.
-result will be added to the dataset.csv file as a new column, this would facilitate the prompt at next step 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('ner_processing.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
-"""
-# IF initializing NER model with problem
-## Try : uninstall sentencepiece and reinstall it
+def print_gpu_utilization():
+    if torch.cuda.is_available():
+        logging.info(f"GPU utilization: {torch.cuda.utilization()}%")
+        logging.info(f"Memory allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
 
-def clean_data(data):
-    cleaned = []
-    for line in data:
-        line = line.strip()  # 去除空格
-        if not line or line.isspace() or set(line) <= {'-', '_', ' ', '—'} or '\x0c' in line:
-            continue
-        line = " ".join((line.split()))
-        cleaned.append(line)
+class TextDataset(Dataset):
+    def __init__(self, dataframe: pd.DataFrame):
+        self.data = dataframe
+        logging.info(f"Dataset initialized with {len(dataframe)} rows")
 
-    return cleaned
-def get_ner_date(file):
-    # data cleaning
-    with open(file, 'r', encoding='utf-8') as f:
-        data = f.read().split('\n')
-    data = clean_data(data)
-    # data processing
-    date_results = []
-    results_total = nlp(data)
-    for sublist in results_total:
-        for item in sublist:
-            if item['entity'] == 'DATE':
-                date_results.append(item['word'])
-    data_results = [i for i in date_results if 20>len(i)>5 and "à" not in i]
-    data_results = data_results[:15]
-    return data_results
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> Tuple[str, str, str]:
+        """返回 (file_name, raw_text_content, original_url)"""
+        row = self.data.iloc[idx]
+        return (
+            row['local_filename'],
+            row['raw_text_content'],  # 使用raw_text_content
+            row['text version']
+        )
+
+def custom_collate_fn(batch: List[Tuple[str, str, str]]) -> Tuple[List[str], List[str], List[str]]:
+    """整理批次数据"""
+    file_names, texts, urls = zip(*batch)
+    return list(file_names), list(texts), list(urls)
+
+class OptimizedNERProcessor:
+    def __init__(
+            self,
+            model_name: str = "Jean-Baptiste/camembert-ner-with-dates",
+            device: str = "cuda" if torch.cuda.is_available() else "cpu",
+            batch_size: int = 64,
+            num_workers: int = 8
+    ):
+        self.device = device
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.max_length = 512  # tokenizer 最大长度
+
+        logging.info(f"Initializing NER processor with device: {device}")
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForTokenClassification.from_pretrained(model_name).to(device)
+
+            self.nlp = pipeline(
+                task='ner',
+                model=self.model,
+                tokenizer=self.tokenizer,
+                device=0 if device == "cuda" else -1,
+                aggregation_strategy='simple'
+            )
+            logging.info("Model loaded successfully")
+            print_gpu_utilization()
+
+        except Exception as e:
+            logging.error(f"Error initializing model: {e}")
+            raise
+
+    def process_text(self, text: str) -> List[str]:
+        """处理单个文本，返回日期列表"""
+        try:
+            # 分块处理长文本
+            dates = []
+            chunks = [text[i:i + self.max_length] for i in range(0, len(text), self.max_length)]
+
+            for chunk in chunks:
+                with torch.no_grad():
+                    results = self.nlp(chunk)
+
+                    chunk_dates = [
+                        item['word']
+                        for item in results
+                        if isinstance(item, dict)
+                           and item.get('entity_group') == 'DATE'
+                    ]
+                    dates.extend(chunk_dates)
+
+            return self.filter_dates(dates)
+
+        except Exception as e:
+            logging.error(f"Error processing text: {str(e)}")
+            return []
+
+    def filter_dates(self, dates: List[str]) -> List[str]:
+        """过滤和清理日期"""
+        filtered_dates = [
+            date for date in dates
+            if 5 < len(date) < 20
+               and "à" not in date
+               and any(char.isdigit() for char in date)
+        ]
+        # 去重并保持顺序
+        return list(dict.fromkeys(filtered_dates))[:15]
+
+    def process_batch(self, file_names: List[str], texts: List[str], urls: List[str]) -> Dict[str, List[str]]:
+        """处理一批文本，返回文件名到日期列表的映射"""
+        results = {}
+        for fname, text, url in zip(file_names, texts, urls):
+            try:
+                dates = self.process_text(text)
+                logging.info(f"File: {fname}, Found {len(dates)} dates")
+                results[fname] = dates
+            except Exception as e:
+                logging.error(f"Error processing file {fname}: {e}")
+                results[fname] = []
+        return results
+
+    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """处理整个DataFrame"""
+        try:
+            # 确保使用raw_text_content列
+            dataset = TextDataset(df[['local_filename', 'raw_text_content', 'text version']])
+            dataloader = DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                shuffle=False,
+                collate_fn=custom_collate_fn,
+                pin_memory=True
+            )
+
+            all_results = {}
+            for file_names, raw_texts, urls in tqdm(dataloader, desc="Processing files"):
+                # 这里的texts是raw_texts
+                batch_results = self.process_batch(file_names, raw_texts, urls)
+                all_results.update(batch_results)
+
+                if len(all_results) % 50 == 0:
+                    print_gpu_utilization()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        gc.collect()
+
+            # 更新DataFrame
+            df['extracted_dates'] = df['local_filename'].map(all_results)
+            return df
+
+        except Exception as e:
+            logging.error(f"Error in process_dataframe: {e}")
+            raise
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--csv", type=str, required=True, help="Input CSV path")
+    parser.add_argument("--model", type=str, default="Jean-Baptiste/camembert-ner-with-dates")
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=4)
+    args = parser.parse_args()
+
+    try:
+        # 读取数据
+        df = pd.read_csv(args.csv)
+        logging.info(f"Loaded DataFrame with {len(df)} rows")
+
+        # 初始化处理器
+        processor = OptimizedNERProcessor(
+            model_name=args.model,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers
+        )
+
+        # 处理数据
+        result_df = processor.process_dataframe(df)
+
+        # 保存结果
+        output_path = Path(args.csv).stem + "_ner.csv"
+        result_df.to_csv(output_path, index=False)
+        logging.info(f"Results saved to {output_path}")
+
+    except Exception as e:
+        logging.error(f"Error in main: {e}")
+        raise
 
 if __name__ == "__main__":
-    results = {}
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--file", type=str, help="The path to the txt file.")
-    parser.add_argument("--model", type=str, help="The model name.",default="Jean-Baptiste/camembert-ner-with-dates")
-    parser.add_argument("--csv", type=str, help="The path to the csv file.")
-    parser.add_argument("--device", type=str, help="The device to use.",default="cpu")
-
-    args = parser.parse_args()
-    device = torch.device(args.device)
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-    model = AutoModelForTokenClassification.from_pretrained(args.model).to(device)
-    nlp = Pipeline('ner', model=model, tokenizer=tokenizer,aggregation_strategy='simple',device=device)
-
-
-    file_list = os.listdir(args.file)
-    print("it may take a while")
-    for file in file_list:
-        file_path = os.path.join(args.file, file)
-        date_results = get_ner_date(file_path)
-        results[file] = date_results
-    # put the results into a dataframe
-    df = pandas.read_csv(args.csv)
-    df['date'] = df['local_filename'].map(results)
-    csv_name = args.csv.split(".")[0] + "_ner.csv"
-    df.to_csv(csv_name, index=False)
-
-
-
+    main()

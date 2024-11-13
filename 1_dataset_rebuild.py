@@ -1,70 +1,89 @@
-import os
-import pandas
-import subprocess
+import pandas as pd
+from pathlib import Path
+import aiohttp
+import asyncio
+from tqdm.asyncio import tqdm_asyncio
+from typing import Dict, List, Tuple
 
+class DatasetProcessor:
+    def __init__(self, min_length: int = 500):
+        self.min_length = min_length
+        self.valid_files: Dict[int, str] = {}
+        self.failed_downloads: List[str] = []
+        self.file_paths: Dict[str, str] = {}
 
-"""1st step: Download and validate PDFs
-
-Dataset provided by the Datapolitics -> dataset.csv
-
-Defaults: The server is not stable, each time the download is launched, there are some "access denied" errors.
-
-To solve this problem, our team propose a solution with the following steps:
-1. curl the dataset.csv text version column to get the txt file
-2. for each txt file, read the content, if the content is less than 500 characters, we abandon it
-3. update the dataset.csv with the selected txt files, and create a new column call local_file to store the txt file at local computer.
-
-:param dataset: the dataset.csv file
-:param output_dir: the output directory to store the txt files
-:param min_length: the minimum length of the text content, default 500
-:return: the updated dataset.csv file
-
-"""
-
-
-def download_and_validate_pdfs(dataset, output_dir="./txt", min_length=500):
-    """Download PDFs and validate their content"""
-    os.makedirs(output_dir, exist_ok=True)
-
-    valid_files = {}
-    failed_downloads = []
-    file_paths = {}  # New dict to store file paths
-
-    for counter, (index, url) in enumerate(tqdm(dataset['text version'].items())):
-        file_name = f"dataset_pdf_{counter}.txt"
-        file_path = os.path.join(output_dir, file_name)
-
+    async def download_file(self, url: str, file_path: Path) -> Tuple[bool, str]:
+        """异步下载单个文件"""
         try:
-            subprocess.run(["curl", "-L", "-o", file_path, url],
-                           check=True, capture_output=True)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        content = await response.text()
+                        if len(content) >= self.min_length:
+                            # 保存原始内容
+                            file_path.write_text(content, encoding='utf-8')
+                            # 返回带URL的内容和原始内容
+                            content_with_url = f"{url}\n{content}"
+                            return True, (content_with_url, content)
+        except Exception as e:
+            print(f"Error downloading {url}: {e}")
+        return False, ("", "")
 
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if len(content) >= min_length:
-                    valid_files[counter] = index
-                    file_paths[index] = file_name  # Store filename for valid files
-                else:
-                    os.remove(file_path)
-                    failed_downloads.append(index)
+    async def process_dataset(self,
+                              dataset: pd.DataFrame,
+                              output_dir: Path) -> pd.DataFrame:
+        """处理整个数据集"""
+        output_dir.mkdir(exist_ok=True)
 
-        except (subprocess.CalledProcessError, IOError):
-            failed_downloads.append(index)
-            if os.path.exists(file_path):
-                os.remove(file_path)
+        # 准备下载任务
+        tasks = []
+        for idx, url in dataset['text version'].items():
+            file_path = output_dir / f"dataset_pdf_{idx}.txt"
+            tasks.append(self.download_file(url, file_path))
 
-    # Update dataset
-    dataset_valid = dataset[~dataset.index.isin(failed_downloads)].copy()
-    dataset_valid['local_filename'] = dataset_valid.index.map(file_paths)
+        # 并发下载
+        results = await tqdm_asyncio.gather(*tasks)
 
-    assert len(os.listdir(output_dir)) == len(dataset_valid)
+        # 处理结果
+        valid_mask = pd.Series(False, index=dataset.index)
+        text_contents = {}
+        raw_text_contents = {}
 
-    return dataset_valid
+        for idx, (success, (content_with_url, raw_content)) in enumerate(results):
+            if success:
+                valid_mask.iloc[idx] = True
+                text_contents[idx] = content_with_url
+                raw_text_contents[idx] = raw_content
 
+        # 更新数据集
+        dataset_valid = dataset[valid_mask].copy()
+        dataset_valid['local_filename'] = [
+            f"dataset_pdf_{i}.txt" for i in dataset_valid.index
+        ]
+        dataset_valid['text_content'] = dataset_valid.index.map(text_contents)
+        dataset_valid['raw_text_content'] = dataset_valid.index.map(raw_text_contents)
 
-if __name__ == "__main__":
-    dataset = pandas.read_csv("dataset.csv")
-    dataset_valid = download_and_validate_pdfs(dataset)
+        return dataset_valid
+
+async def main():
+    # 配置
+    dataset_path = Path("dataset.csv")
+    output_dir = Path("./txt")
+
+    # 加载数据
+    data = pd.read_csv(dataset_path)
+
+    # 处理数据
+    processor = DatasetProcessor()
+    dataset_valid = await processor.process_dataset(data, output_dir)
+
+    # 保存结果
     dataset_valid.to_csv("dataset_valid.csv", index=False)
     print(f"Valid entries: {len(dataset_valid)}")
-    print(dataset_valid[['text version', 'local_filename']].head())
-    print("Done. now please proceed next step : 2_ner.py")
+    print("\nSample with URL:")
+    print(dataset_valid['text_content'].head(1))
+    print("\nSample without URL:")
+    print(dataset_valid['raw_text_content'].head(1))
+
+if __name__ == "__main__":
+    asyncio.run(main())

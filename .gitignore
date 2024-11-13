@@ -1,0 +1,16 @@
+# IDE 配置
+.idea/
+.ipynb_checkpoints/
+
+# 数据文件
+dataset_valid.csv
+dataset_valid_ner.csv
+test1_confirmed.csv
+
+# 日志文件
+ner_processing.log
+
+# 数据目录
+raw_data/
+txt/
+txt_pytext/
