@@ -14,3 +14,8 @@ ner_processing.log
 raw_data/
 txt/
 txt_pytext/
+
+
+2_test_ner.py
+llmreference_test.py
+main2.ipynb
