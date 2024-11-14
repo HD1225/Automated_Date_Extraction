@@ -153,7 +153,7 @@ class OptimizedNERProcessor:
                         gc.collect()
 
             # 更新DataFrame
-            df['extracted_dates'] = df['local_filename'].map(all_results)
+            df['time_list'] = df['local_filename'].map(all_results)
             return df
 
         except Exception as e:

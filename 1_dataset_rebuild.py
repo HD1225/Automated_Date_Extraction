@@ -4,13 +4,33 @@ import aiohttp
 import asyncio
 from tqdm.asyncio import tqdm_asyncio
 from typing import Dict, List, Tuple
+def clean_text(text):
+    """
+    remove space and not line
+    """
 
+    lines = text.splitlines()
+    # 2. clean empty line and useless string
+    cleaned_lines = []
+    for line in lines:
+        line = line.strip()
+        # replace with empty string
+        line = ' '.join(line.split())
+        if line:  # save only line
+            cleaned_lines.append(line)
+
+    # 3. make a string with each line
+    cleaned_text = ' '.join(cleaned_lines)
+    cleaned_text = f'"{cleaned_text}"'
+
+    return cleaned_text
 class DatasetProcessor:
     def __init__(self, min_length: int = 500):
         self.min_length = min_length
         self.valid_files: Dict[int, str] = {}
         self.failed_downloads: List[str] = []
         self.file_paths: Dict[str, str] = {}
+
 
     async def download_file(self, url: str, file_path: Path) -> Tuple[bool, str]:
         """异步下载单个文件"""
@@ -52,8 +72,10 @@ class DatasetProcessor:
         for idx, (success, (content_with_url, raw_content)) in enumerate(results):
             if success:
                 valid_mask.iloc[idx] = True
-                text_contents[idx] = content_with_url
-                raw_text_contents[idx] = raw_content
+                content_with_url = clean_text(content_with_url)
+                text_contents[idx] = content_with_url[:4000]
+                raw_content = clean_text(raw_content)
+                raw_text_contents[idx] = raw_content[:8000]
 
         # 更新数据集
         dataset_valid = dataset[valid_mask].copy()
