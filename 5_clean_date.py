@@ -66,15 +66,17 @@ def clean_date(date_str):
     return None
 
 #### main
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_csv", type=str,help="input csv file",required=True)
-    parser.add_argument("output_csv", type=str,help="output csv file",required=True)
+    parser.add_argument("input_csv", type=str, help="input csv file")
+    parser.add_argument("-o", "--output_csv", type=str, help="output csv file",required=True)
     args = parser.parse_args()
+
     df = pd.read_csv(args.input_csv)
     df['extracted_date'] = df['predicted_time'].apply(lambda x: extract_date(str(x)))
-    df['cleaned_date'] = df['extracted_date'].apply(lambda x: clean_date(x))
-
-    print(df[['predicted_time', 'extracted_date', 'cleaned_date']])
-
-    df.to_csv('cleaned_dates.csv', index=False)
+    df['cleaned_prediction_date'] = df['extracted_date'].apply(lambda x: clean_date(x))
+    # print(df.columns.to_list())
+    # print(df[['predicted_time', 'extracted_date', 'cleaned_date']])
+    df = df[['doc_id', 'url', 'cache', 'text version', 'nature', 'published', 'entity', 'entity_type', 'local_filename','cleaned_prediction_date']]
+    df.to_csv(args.output_csv, index=False)
