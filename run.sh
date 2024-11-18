@@ -12,5 +12,6 @@ python 5_clean_date.py ./final_results_predicted.csv -o ./pipeline_result.csv
 
 echo "Ready to calculate accuracy"
 
-# todo
-## how to base on google sheet to do the same thing ->
+python 6_evaluation.py -i ./pipeline_result.csv -o ./pipeline_result.csv
+
+echo "pipeline end,please check the result in pipeline_result.csv"
