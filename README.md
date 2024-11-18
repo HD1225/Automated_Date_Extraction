@@ -120,34 +120,75 @@ Standardizes extracted dates into a uniform format:
 
 ## Usage
 
-### Environment Setup
-please Run pipeline_environment.sh as it will create following environment for you (linux + conda only!)
-Please use conda to create a virtual environment to avoid conflicts:
+## Usage
 
+### Environment Setup
+
+We provide two ways to set up the environment:
+
+#### Option 1: Automatic Setup (Recommended)
+Run our setup script to automatically create and configure the environment:
 ```bash
-# Ubuntu 22.04 + CUDA 12.1
+# Make the script executable
+chmod +x pipeline_environment.sh
+```
+
+# Run the setup script
+```bash 
+./pipeline_environment.sh
+```
+#### Option 2: Manuel Setup (NOT Recommended)
+If you prefer to set up manually, follow these steps:
+
+1. Create and activate conda environment:
+
+```bash 
+# Create new environment
 conda create -n automated_date_extraction python=3.12
 conda activate automated_date_extraction
 
-# Install PyTorch 2.3.0
+# Install CUDA toolkit
 conda install cuda-cudart=12.1.105=0 -c nvidia
-conda install pytorch=2.3.0=py3.12_cuda12.1_cudnn8.9.2_0  -c pytorch
 
-# Install required packages (specific versions required)
+# Install PyTorch with CUDA support
+conda install pytorch=2.3.0=py3.12_cuda12.1_cudnn8.9.2_0 -c pytorch
+
+# Install dependencies
 pip install ninja
 pip install flash-attn --no-build-isolation 
-pip install modelscope==1.18.0  # For model download
+pip install modelscope==1.18.0
 pip install openai==1.46.0
 pip install tqdm==4.66.2
 pip install transformers==4.44.2
 pip install vllm==0.6.1.post2
 
-# model download 
+# Download Qwen models
 modelscope download Qwen/Qwen2.5-14B-Instruct
 modelscope download Qwen/Qwen2.5-7B-Instruct
-
 ```
-**Note**: Windows compatibility is not guaranteed due to flash_attn dependencies. For flash_attn installation (v2.6.3), please check the official release page: https://github.com/Dao-AILab/flash-attention
+
+### System Requirements
+* **Operating System**: Ubuntu 22.04 or compatible Linux distribution
+* **GPU**: NVIDIA GPU with
+  * Minimum 24GB VRAM for Qwen 7B model
+  * Minimum 40GB VRAM for Qwen 14B model
+* **CUDA**: CUDA 12.1
+* **Package Manager**: Conda
+
+### Important Notes
+* **Windows Compatibility**: Not guaranteed due to flash-attention dependencies
+* **Flash Attention**: For specific installation requirements of flash-attention (v2.6.3), please refer to the [official documentation](https://github.com/Dao-AILab/flash-attention)
+* **GPU Memory**: Ensure sufficient GPU memory is available before running the models
+* **Installation Issues**: If you encounter issues with flash-attention installation, try installing it separately after other dependencies
+
+### Troubleshooting
+If you encounter any installation issues:
+1. Ensure your CUDA drivers are properly installed
+2. Check GPU compatibility and available memory
+3. Verify all dependencies are installed in the correct order
+4. For flash-attention specific issues, consult the official documentation
+
+
 
 
 ## Performance Benchmarks
