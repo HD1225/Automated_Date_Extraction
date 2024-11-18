@@ -1,22 +1,50 @@
 #!/bin/bash
-# This is the first pipeline, as we assume you have already conda in your computer
-echo "please make sure you have GPU larger than 24GvRAM for 7B model, 40GvRAM for 14B model, linux system"
 
-export CONDA_ENV_NAME="py312torch230"
-echo @CONDA_ENV_NAME
+# Check if running on Linux
+if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+    echo "Error: This script requires a Linux operating system"
+    exit 1
+fi
 
-conda create -n $CONDA_ENV_NAME python=3.12
+# Print system requirements
+echo "System Requirements:"
+echo "- Linux operating system"
+echo "- NVIDIA GPU with:"
+echo "  * Minimum 24GB VRAM for Qwen 7B model"
+echo "  * Minimum 40GB VRAM for Qwen 14B model"
+echo "- CUDA 12.1 compatible system"
+echo "- Conda package manager"
+echo
 
+# Check if conda is installed
+if ! command -v conda &> /dev/null; then
+    echo "Error: conda is not installed. Please install Conda first."
+    exit 1
+fi
 
-# open conda env
+# Environment setup
+CONDA_ENV_NAME="py312torch230"
+echo "Setting up conda environment: $CONDA_ENV_NAME"
+
+# Remove existing environment if it exists
+conda deactivate 2>/dev/null
+echo "Removing existing environment if it exists..."
+conda env remove -n $CONDA_ENV_NAME -y
+
+# Create and activate new environment
+echo "Creating new conda environment..."
+conda create -n $CONDA_ENV_NAME python=3.12 -y || { echo "Failed to create conda environment"; exit 1; }
+
+# Ensure conda environment is properly activated
 eval "$(conda shell.bash hook)"
+conda activate $CONDA_ENV_NAME || { echo "Failed to activate conda environment"; exit 1; }
 
-conda activate $CONDA_ENV_NAME
+# Install dependencies
+echo "Installing CUDA and PyTorch..."
+conda install -y cuda-cudart=12.1.105=0 -c nvidia || { echo "Failed to install CUDA"; exit 1; }
+conda install -y pytorch=2.3.0=py3.12_cuda12.1_cudnn8.9.2_0 -c pytorch || { echo "Failed to install PyTorch"; exit 1; }
 
-# requirements
-conda install cuda-cudart=12.1.105=0 -c nvidia
-
-conda install pytorch=2.3.0=py3.12_cuda12.1_cudnn8.9.2_0  -c pytorch
+echo "Installing Python packages..."
 
 pip install ninja
 pip install flash-attn --no-build-isolation
@@ -28,5 +56,10 @@ pip install vllm==0.6.1.post2
 
 
 # model download
+echo "Downloading Qwen models..."
 modelscope download Qwen/Qwen2.5-14B-Instruct
 modelscope download Qwen/Qwen2.5-7B-Instruct
+
+echo "Installation completed successfully!"
+echo "Activated conda environment: $CONDA_ENV_NAME"
+echo "You can now run your scripts using this environment."
