@@ -2,6 +2,7 @@
 
 # if you want to process all the dataset
 #1. download all the text file from datapolitics
+echo "default dataset is dataset_200example, if you want to test on other dataset, please open 1_dataset_rebuild.py and change the dataset path"
 python 1_dataset_rebuild.py
 #2. do ner
 python 2_ner.py --csv ./dataset_valid.csv

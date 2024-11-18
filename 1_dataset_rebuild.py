@@ -88,8 +88,12 @@ class DatasetProcessor:
         return dataset_valid
 
 async def main():
-    # 配置
-    dataset_path = Path("dataset.csv")
+    # configuration
+    ## if you want to run the whole dataset, please change the path here
+
+    print("current is processing the dataset_200example.csv, if you want to change, please open this 1_dataset_build change the dataset path here ")
+
+    dataset_path = Path("./dataset_200example.csv")
     output_dir = Path("./txt")
 
     # 加载数据
