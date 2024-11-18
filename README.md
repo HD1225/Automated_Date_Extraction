@@ -72,9 +72,56 @@ Uses LLM reasoning to select the most accurate publication date:
   - Robust error handling
   - Context-aware date selection
 
+### 5. Date Format Cleaning (clean_date.py)
+Standardizes extracted dates into a uniform format:
+
+- **Date Pattern Recognition**
+
+  - Handles multiple French date formats:
+
+    * DD Month YYYY (e.g., "1er juillet 2023")
+    * DD/MM/YYYY or DD/MM/YY
+    * DD-MM-YYYY or DD-MM-YY
+    * Month YYYY (e.g., "OCTOBRE 2022")
+
+
+  - **Supports variations in month names (lowercase, uppercase, accented)**
+  
+  
+  - **Format Standardization**
+
+    * Converts all dates to DD/MM/YYYY format
+    * Handles French month names using comprehensive mapping
+    * Processes special cases like "1er" (first of month)
+    * Assumes 20xx for two-digit years
+    * Sets default day to 01 for month-year only dates
+
+### 6. Evaluation (6_evaluation.py)
+   Assesses the accuracy of date extraction results:
+
+- **Accuracy Metrics**
+
+  *   Compares extracted dates with gold standard labels
+  *   Calculates two accuracy scores:
+      1. Datapolitics accuracy (published vs. gold label)
+      2. Our prediction accuracy (cleaned prediction vs. gold label)
+
+  **Output Generation**
+    *   Creates comprehensive evaluation report
+    *   Includes metadata and comparison columns
+    *   Saves results in CSV format
+
+
+  - **Key Features**
+    *   Handles missing columns gracefully
+    *   Supports flexible input/output paths
+    *   Provides formatted accuracy statistics
+
+
 ## Usage
 
 ### Environment Setup
+please Run pipeline_environment.sh as it will create following environment for you (linux + conda only!)
 Please use conda to create a virtual environment to avoid conflicts:
 
 ```bash
