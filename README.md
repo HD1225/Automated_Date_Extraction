@@ -2,9 +2,9 @@
 This repository contains the implementation of an automated date extraction system for French administrative documents, developed as part of the NLP in Industry final project at Université Paris Cité M2 NLP.
 
 **Group Members:**
-- Xu Sun
+**- Xu Sun**
 - Dan Hou
-- Haaeul Hwang
+- Haeeul Hwang
 - Léo Mégret
 
 ## Introduction
@@ -117,9 +117,7 @@ Standardizes extracted dates into a uniform format:
     *   Supports flexible input/output paths
     *   Provides formatted accuracy statistics
 
-
-## Usage
-
+  
 ## Usage
 
 ### Environment Setup
