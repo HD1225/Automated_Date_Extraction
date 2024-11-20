@@ -125,7 +125,7 @@ if __name__ == "__main__":
         input = template.format(事件列表=timelist,文本=context_cleaned)
         print(input)
 
-        outputs = get_completion(input, model, tokenizer=tokenizer, max_tokens=25, temperature=0.05, top_p=0.95)
+        outputs = get_completion(input, model, tokenizer=tokenizer, max_tokens=25, temperature=0.08, top_p=0.95)
         for output in outputs:
             results = output.outputs[0].text
             print(results)
@@ -133,5 +133,5 @@ if __name__ == "__main__":
         # print(results_all)
         # break
     dataframe["predicted_time"] = dataframe['local_filename'].map(results_all)
-    df = dataframe[['doc_id','url','cache','text version','nature','published','entity','entity_type','predicted_time'，'Gold_label']]
+    df = dataframe[['doc_id','url','cache','text version','nature','published','entity','entity_type','predicted_time','Gold_label']]
     df.to_csv("final_results_predicted.csv",index=False)
