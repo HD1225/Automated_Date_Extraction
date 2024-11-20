@@ -79,5 +79,5 @@ if __name__ == "__main__":
     df['cleaned_gold_date'] = df['Gold_label'].apply(lambda x: clean_date(x))
     # print(df.columns.to_list())
     # print(df[['predicted_time', 'extracted_date', 'cleaned_date']])
-    df = df[['doc_id', 'url', 'cache', 'text version', 'nature', 'published', 'entity', 'entity_type', 'cleaned_prediction_date'，　'cleaned_gold_date']]
+    df = df[['doc_id', 'url', 'cache', 'text version', 'nature', 'published', 'entity', 'entity_type', 'cleaned_prediction_date'，　'cleaned_gold_label']]
     df.to_csv(args.output_csv, index=False)
