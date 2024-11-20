@@ -23,7 +23,7 @@ if ! command -v conda &> /dev/null; then
 fi
 
 # Environment setup
-CONDA_ENV_NAME="py312torch230"
+CONDA_ENV_NAME="py312torch240cuda121"
 echo "Setting up conda environment: $CONDA_ENV_NAME"
 
 # Remove existing environment if it exists
@@ -42,17 +42,19 @@ conda activate $CONDA_ENV_NAME || { echo "Failed to activate conda environment";
 # Install dependencies
 echo "Installing CUDA and PyTorch..."
 conda install -y cuda-cudart=12.1.105=0 -c nvidia || { echo "Failed to install CUDA"; exit 1; }
-conda install -y pytorch=2.3.0=py3.12_cuda12.1_cudnn8.9.2_0 -c pytorch || { echo "Failed to install PyTorch"; exit 1; }
-
+#conda install -y pytorch=2.3.0=py3.12_cuda12.1_cudnn8.9.2_0 -c pytorch || { echo "Failed to install PyTorch"; exit 1; }
+conda -y install nvidia/label/cuda-12.1.0::cuda-nvcc
 echo "Installing Python packages..."
 
 pip install ninja
-pip install flash-attn --no-build-isolation
+#pip install flash-attn --no-build-isolation
 pip install modelscope==1.18.0  # For model download
 pip install openai==1.46.0
 pip install tqdm==4.66.2
 pip install transformers==4.44.2
 pip install vllm==0.6.1.post2
+
+pip install flash-attn --no-build-isolation
 
 
 # model download
